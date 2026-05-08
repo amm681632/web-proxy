@@ -1,0 +1,186 @@
+name: Web Proxy Server
+
+on:
+  workflow_dispatch:  # فقط زمانی اجرا شود که شما دستی شروع کنید
+  schedule:
+    - cron: '0 */6 * * *'  # هر 6 ساعت یکبار اجرا شود (برای تازه نگه داشتن)
+
+jobs:
+  proxy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 360  # حداکثر 6 ساعت اجرا شود (محدودیت گیت‌هاب)
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+
+    - name: Install proxy server
+      run: |
+        npm install -g localtunnel
+        npm install -g http-server
+
+    - name: Create proxy page
+      run: |
+        cat > index.html << 'EOF'
+        <!DOCTYPE html>
+        <html lang="fa">
+        <head>
+            <meta charset="UTF-8">
+            <title>پروکسی روی گیت‌هاب اکشنز</title>
+            <style>
+                body {
+                    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+                    max-width: 1200px;
+                    margin: 0 auto;
+                    padding: 20px;
+                    background: #0d1117;
+                    color: #c9d1d9;
+                }
+                .header {
+                    background: #161b22;
+                    padding: 15px;
+                    border-radius: 10px;
+                    margin-bottom: 20px;
+                    text-align: center;
+                }
+                .proxy-box {
+                    background: #21262d;
+                    padding: 20px;
+                    border-radius: 8px;
+                    margin-bottom: 20px;
+                }
+                input {
+                    width: 70%;
+                    padding: 12px;
+                    font-size: 16px;
+                    background: #0d1117;
+                    border: 1px solid #30363d;
+                    color: white;
+                    border-radius: 6px;
+                    margin: 10px 0;
+                }
+                button {
+                    background: #238636;
+                    color: white;
+                    border: none;
+                    padding: 12px 24px;
+                    font-size: 16px;
+                    border-radius: 6px;
+                    cursor: pointer;
+                    margin: 5px;
+                }
+                button:hover {
+                    background: #2ea043;
+                }
+                iframe {
+                    width: 100%;
+                    height: 600px;
+                    border: 1px solid #30363d;
+                    border-radius: 8px;
+                    background: white;
+                }
+                .status {
+                    background: #238636;
+                    padding: 5px 10px;
+                    border-radius: 20px;
+                    display: inline-block;
+                    font-size: 12px;
+                }
+                .info {
+                    font-size: 12px;
+                    color: #8b949e;
+                    margin-top: 10px;
+                    text-align: center;
+                }
+            </style>
+        </head>
+        <body>
+            <div class="header">
+                <h1>🌐 پروکسی روی گیت‌هاب اکشنز</h1>
+                <p>وضعیت: <span class="status">روشن و فعال 🟢</span></p>
+                <p>سرور اجرا شده در تاریخ: <span id="date"></span></p>
+            </div>
+            
+            <div class="proxy-box">
+                <h3>آدرس سایت مورد نظر را وارد کنید:</h3>
+                <input type="text" id="urlInput" placeholder="مثال: https://youtube.com یا youtube.com">
+                <div>
+                    <button onclick="loadSiteInFrame()">نمایش در همین صفحه</button>
+                    <button onclick="openInNewTab()">باز کردن در تب جدید</button>
+                    <button onclick="useAllOrigins()">استفاده از AllOrigins (برای سایت‌های مشکل‌دار)</button>
+                </div>
+                <iframe id="siteFrame" src="about:blank"></iframe>
+            </div>
+            
+            <div class="info">
+                ⚠️ توجه: این پروکسی فقط برای وبگردی ساده مناسب است. برای ورود به حساب‌های شخصی (جیمیل، تلگرام و...) استفاده نکنید.<br>
+                🔄 این سرور حدود 6 ساعت فعال خواهد بود.
+            </div>
+
+            <script>
+                document.getElementById('date').innerText = new Date().toLocaleString('fa-IR');
+                
+                function loadSiteInFrame() {
+                    let url = document.getElementById('urlInput').value;
+                    if (!url.startsWith('http')) url = 'https://' + url;
+                    
+                    const iframe = document.getElementById('siteFrame');
+                    const proxyUrl = 'https://api.allorigins.win/get?url=' + encodeURIComponent(url);
+                    
+                    fetch(proxyUrl)
+                        .then(response => response.json())
+                        .then(data => {
+                            const doc = iframe.contentWindow.document;
+                            doc.open();
+                            doc.write(data.contents);
+                            doc.close();
+                        })
+                        .catch(error => {
+                            iframe.srcdoc = `<html><body style="color:red;padding:20px;">خطا: ${error}<br>سایت ممکن است قابل دسترسی نباشد.</body></html>`;
+                        });
+                }
+                
+                function openInNewTab() {
+                    let url = document.getElementById('urlInput').value;
+                    if (!url.startsWith('http')) url = 'https://' + url;
+                    window.open(url, '_blank');
+                }
+                
+                function useAllOrigins() {
+                    let url = document.getElementById('urlInput').value;
+                    if (!url.startsWith('http')) url = 'https://' + url;
+                    const proxyUrl = 'https://api.allorigins.win/get?url=' + encodeURIComponent(url);
+                    window.open(proxyUrl, '_blank');
+                }
+                
+                // پشتیبانی از Enter
+                document.getElementById('urlInput').addEventListener('keypress', function(e) {
+                    if (e.key === 'Enter') loadSiteInFrame();
+                });
+            </script>
+        </body>
+        </html>
+        EOF
+
+    - name: Start tunnel
+      run: |
+        # یک سرور HTTP ساده روی پورت 8080 راه می‌اندازیم
+        nohup http-server -p 8080 &
+        sleep 5
+        # یک تونل به دنیای خارج ایجاد می‌کنیم
+        npx localtunnel --port 8080 --subdomain github-proxy-${{ github.run_id }} &
+        sleep 10
+        echo "✅ پروکسی روشن شد!"
+        echo "🌐 آدرس دسترسی: https://github-proxy-${{ github.run_id }}.loca.lt"
+        echo "⏱ این لینک تا 6 ساعت فعال است"
+        
+        # سرور را برای مدت طولانی فعال نگه می‌داریم
+        while true; do sleep 60; done
+
+    - name: Keep alive
+      run: sleep 6h
