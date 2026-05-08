@@ -17,11 +17,8 @@ jobs:
       with:
         node-version: '18'
 
-    - name: Install dependencies
-      run: |
-        npm install -g http-server
-        curl -L https://github.com/ekzhang/bore/releases/download/v0.5.0/bore-v0.5.0-x86_64-unknown-linux-musl.tar.gz | tar xz
-        sudo mv bore /usr/local/bin/
+    - name: Install http-server
+      run: npm install -g http-server
 
     - name: Create proxy page
       run: |
@@ -30,161 +27,102 @@ jobs:
         <html lang="fa">
         <head>
             <meta charset="UTF-8">
-            <title>پروکسی روی گیت‌هاب اکشنز</title>
+            <title>پروکسی گیت‌هاب اکشنز</title>
             <style>
                 body {
-                    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-                    max-width: 1200px;
-                    margin: 0 auto;
+                    font-family: Tahoma, sans-serif;
+                    max-width: 900px;
+                    margin: 50px auto;
                     padding: 20px;
                     background: #0d1117;
                     color: #c9d1d9;
                 }
-                .header {
+                .box {
                     background: #161b22;
-                    padding: 15px;
+                    padding: 30px;
                     border-radius: 10px;
-                    margin-bottom: 20px;
-                    text-align: center;
-                }
-                .proxy-box {
-                    background: #21262d;
-                    padding: 20px;
-                    border-radius: 8px;
-                    margin-bottom: 20px;
-                }
-                input {
-                    width: 70%;
-                    padding: 12px;
-                    font-size: 16px;
-                    background: #0d1117;
                     border: 1px solid #30363d;
-                    color: white;
-                    border-radius: 6px;
+                }
+                input, button {
+                    width: 100%;
+                    padding: 12px;
                     margin: 10px 0;
+                    border-radius: 6px;
+                    border: 1px solid #30363d;
+                    background: #0d1117;
+                    color: white;
+                    font-size: 16px;
                 }
                 button {
                     background: #238636;
-                    color: white;
-                    border: none;
-                    padding: 12px 24px;
-                    font-size: 16px;
-                    border-radius: 6px;
                     cursor: pointer;
-                    margin: 5px;
+                    width: auto;
                 }
-                button:hover {
-                    background: #2ea043;
-                }
+                button:hover { background: #2ea043; }
                 iframe {
                     width: 100%;
-                    height: 600px;
+                    height: 500px;
                     border: 1px solid #30363d;
                     border-radius: 8px;
+                    margin-top: 20px;
                     background: white;
                 }
                 .status {
-                    background: #238636;
-                    padding: 5px 10px;
-                    border-radius: 20px;
-                    display: inline-block;
-                    font-size: 12px;
-                }
-                .info {
-                    font-size: 12px;
-                    color: #8b949e;
-                    margin-top: 10px;
-                    text-align: center;
+                    color: #3fb950;
+                    font-size: 14px;
                 }
             </style>
         </head>
         <body>
-            <div class="header">
-                <h1>🌐 پروکسی روی گیت‌هاب اکشنز</h1>
-                <p>وضعیت: <span class="status">روشن و فعال 🟢</span></p>
-                <p>سرور اجرا شده در تاریخ: <span id="date"></span></p>
+            <div class="box">
+                <h2>🌐 پروکسی روی گیت‌هاب</h2>
+                <p>وضعیت: <span class="status">✅ سرور فعال است</span></p>
+                <p>آدرس سایت را وارد کنید:</p>
+                <input type="text" id="url" placeholder="youtube.com یا https://youtube.com">
+                <button onclick="loadSite()">نمایش سایت</button>
+                <iframe id="frame" src="about:blank"></iframe>
+                <p style="font-size: 12px; color: #8b949e;">⚠️ فقط برای وبگردی معمولی</p>
             </div>
-            
-            <div class="proxy-box">
-                <h3>آدرس سایت مورد نظر را وارد کنید:</h3>
-                <input type="text" id="urlInput" placeholder="مثال: https://youtube.com یا youtube.com">
-                <div>
-                    <button onclick="loadSiteInFrame()">نمایش در همین صفحه</button>
-                    <button onclick="openInNewTab()">باز کردن در تب جدید</button>
-                </div>
-                <iframe id="siteFrame" src="about:blank"></iframe>
-            </div>
-            
-            <div class="info">
-                ⚠️ توجه: این پروکسی فقط برای وبگردی ساده مناسب است.<br>
-                🔄 این سرور حدود 6 ساعت فعال خواهد بود.<br>
-                📍 برای استفاده، کافیست آدرس سایت را وارد کنید و دکمه را بزنید.
-            </div>
-
             <script>
-                document.getElementById('date').innerText = new Date().toLocaleString('fa-IR');
-                
-                async function loadSiteInFrame() {
-                    let url = document.getElementById('urlInput').value;
+                async function loadSite() {
+                    let url = document.getElementById('url').value;
                     if (!url.startsWith('http')) url = 'https://' + url;
-                    
-                    const iframe = document.getElementById('siteFrame');
-                    
+                    const frame = document.getElementById('frame');
                     try {
-                        const response = await fetch('https://api.allorigins.win/get?url=' + encodeURIComponent(url));
-                        const data = await response.json();
-                        const doc = iframe.contentWindow.document;
+                        const res = await fetch('https://api.allorigins.win/get?url=' + encodeURIComponent(url));
+                        const data = await res.json();
+                        const doc = frame.contentWindow.document;
                         doc.open();
                         doc.write(data.contents);
                         doc.close();
-                    } catch (error) {
-                        iframe.srcdoc = `<html><body style="color:red;padding:20px;font-family:sans-serif;">
-                            <h3>❌ خطا در بارگذاری</h3>
-                            <p>سایت "${url}" قابل دسترسی نیست.</p>
-                            <p>دلیل احتمالی: سایت مسدود است یا پروکسی موقتاً در دسترس نیست.</p>
-                            <p>پیشنهاد: آدرس دیگری را امتحان کنید.</p>
-                        </body></html>`;
+                    } catch(e) {
+                        frame.srcdoc = `<html><body style="color:red;padding:20px;">❌ خطا: ${e.message}</body></html>`;
                     }
                 }
-                
-                function openInNewTab() {
-                    let url = document.getElementById('urlInput').value;
-                    if (!url.startsWith('http')) url = 'https://' + url;
-                    window.open('https://api.allorigins.win/get?url=' + encodeURIComponent(url), '_blank');
-                }
-                
-                document.getElementById('urlInput').addEventListener('keypress', function(e) {
-                    if (e.key === 'Enter') loadSiteInFrame();
-                });
             </script>
         </body>
         </html>
         EOF
 
-    - name: Start proxy server
+    - name: Start and expose server
       run: |
-        # اجرای سرور HTTP در پس‌زمینه
-        nohup http-server -p 8080 --cors &
+        # اجرای سرور
+        nohup http-server -p 8080 --cors > server.log 2>&1 &
         sleep 3
         
-        # ایجاد تونل با bore
-        echo "🔄 در حال ایجاد تونل..."
-        bore local 8080 --to bore.pub > tunnel.txt 2>&1 &
-        sleep 10
+        echo "🔄 در حال اتصال به سرویس تونل..."
+        echo ""
+        echo "=========================================="
+        echo "✅ آدرس پروکسی شما:"
+        echo ""
         
-        # استخراج آدرس تونل
-        TUNNEL_URL=$(cat tunnel.txt | grep -o 'https://[a-z0-9-]*\.bore\.pub' | head -1)
+        # استفاده از serveo.net (معمولاً در ایران بازتر است)
+        curl -s http://serveo.net -d "port=8080" 2>&1 | head -20
         
-        if [ -z "$TUNNEL_URL" ]; then
-            echo "⚠️ آدرس تونل پیدا نشد، تلاش مجدد..."
-            sleep 5
-            TUNNEL_URL=$(curl -s https://bore.pub | grep -o 'https://[a-z0-9-]*\.bore\.pub' | head -1)
-        fi
-        
-        echo "✅ پروکسی روشن شد!"
-        echo "🌐 آدرس دسترسی: ${TUNNEL_URL}"
+        echo ""
+        echo "=========================================="
         echo "⏱ این لینک تا 6 ساعت فعال است"
-        echo "📝 آدرس را در مرورگر باز کنید و از پروکسی استفاده کنید"
+        echo "📋 لینک بالا را کپی کنید و در مرورگر باز کنید"
         
         # نگه داشتن سرور
-        while true; do sleep 60; done
+        sleep 6h
