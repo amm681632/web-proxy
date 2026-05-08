@@ -1,14 +1,12 @@
 name: Web Proxy Server
 
 on:
-  workflow_dispatch:  # فقط زمانی اجرا شود که شما دستی شروع کنید
-  schedule:
-    - cron: '0 */6 * * *'  # هر 6 ساعت یکبار اجرا شود (برای تازه نگه داشتن)
+  workflow_dispatch:
 
 jobs:
   proxy:
     runs-on: ubuntu-latest
-    timeout-minutes: 360  # حداکثر 6 ساعت اجرا شود (محدودیت گیت‌هاب)
+    timeout-minutes: 360
 
     steps:
     - name: Checkout code
@@ -19,10 +17,11 @@ jobs:
       with:
         node-version: '18'
 
-    - name: Install proxy server
+    - name: Install dependencies
       run: |
-        npm install -g localtunnel
         npm install -g http-server
+        curl -L https://github.com/ekzhang/bore/releases/download/v0.5.0/bore-v0.5.0-x86_64-unknown-linux-musl.tar.gz | tar xz
+        sudo mv bore /usr/local/bin/
 
     - name: Create proxy page
       run: |
@@ -112,53 +111,48 @@ jobs:
                 <div>
                     <button onclick="loadSiteInFrame()">نمایش در همین صفحه</button>
                     <button onclick="openInNewTab()">باز کردن در تب جدید</button>
-                    <button onclick="useAllOrigins()">استفاده از AllOrigins (برای سایت‌های مشکل‌دار)</button>
                 </div>
                 <iframe id="siteFrame" src="about:blank"></iframe>
             </div>
             
             <div class="info">
-                ⚠️ توجه: این پروکسی فقط برای وبگردی ساده مناسب است. برای ورود به حساب‌های شخصی (جیمیل، تلگرام و...) استفاده نکنید.<br>
-                🔄 این سرور حدود 6 ساعت فعال خواهد بود.
+                ⚠️ توجه: این پروکسی فقط برای وبگردی ساده مناسب است.<br>
+                🔄 این سرور حدود 6 ساعت فعال خواهد بود.<br>
+                📍 برای استفاده، کافیست آدرس سایت را وارد کنید و دکمه را بزنید.
             </div>
 
             <script>
                 document.getElementById('date').innerText = new Date().toLocaleString('fa-IR');
                 
-                function loadSiteInFrame() {
+                async function loadSiteInFrame() {
                     let url = document.getElementById('urlInput').value;
                     if (!url.startsWith('http')) url = 'https://' + url;
                     
                     const iframe = document.getElementById('siteFrame');
-                    const proxyUrl = 'https://api.allorigins.win/get?url=' + encodeURIComponent(url);
                     
-                    fetch(proxyUrl)
-                        .then(response => response.json())
-                        .then(data => {
-                            const doc = iframe.contentWindow.document;
-                            doc.open();
-                            doc.write(data.contents);
-                            doc.close();
-                        })
-                        .catch(error => {
-                            iframe.srcdoc = `<html><body style="color:red;padding:20px;">خطا: ${error}<br>سایت ممکن است قابل دسترسی نباشد.</body></html>`;
-                        });
+                    try {
+                        const response = await fetch('https://api.allorigins.win/get?url=' + encodeURIComponent(url));
+                        const data = await response.json();
+                        const doc = iframe.contentWindow.document;
+                        doc.open();
+                        doc.write(data.contents);
+                        doc.close();
+                    } catch (error) {
+                        iframe.srcdoc = `<html><body style="color:red;padding:20px;font-family:sans-serif;">
+                            <h3>❌ خطا در بارگذاری</h3>
+                            <p>سایت "${url}" قابل دسترسی نیست.</p>
+                            <p>دلیل احتمالی: سایت مسدود است یا پروکسی موقتاً در دسترس نیست.</p>
+                            <p>پیشنهاد: آدرس دیگری را امتحان کنید.</p>
+                        </body></html>`;
+                    }
                 }
                 
                 function openInNewTab() {
                     let url = document.getElementById('urlInput').value;
                     if (!url.startsWith('http')) url = 'https://' + url;
-                    window.open(url, '_blank');
+                    window.open('https://api.allorigins.win/get?url=' + encodeURIComponent(url), '_blank');
                 }
                 
-                function useAllOrigins() {
-                    let url = document.getElementById('urlInput').value;
-                    if (!url.startsWith('http')) url = 'https://' + url;
-                    const proxyUrl = 'https://api.allorigins.win/get?url=' + encodeURIComponent(url);
-                    window.open(proxyUrl, '_blank');
-                }
-                
-                // پشتیبانی از Enter
                 document.getElementById('urlInput').addEventListener('keypress', function(e) {
                     if (e.key === 'Enter') loadSiteInFrame();
                 });
@@ -167,20 +161,30 @@ jobs:
         </html>
         EOF
 
-    - name: Start tunnel
+    - name: Start proxy server
       run: |
-        # یک سرور HTTP ساده روی پورت 8080 راه می‌اندازیم
-        nohup http-server -p 8080 &
-        sleep 5
-        # یک تونل به دنیای خارج ایجاد می‌کنیم
-        npx localtunnel --port 8080 --subdomain github-proxy-${{ github.run_id }} &
-        sleep 10
-        echo "✅ پروکسی روشن شد!"
-        echo "🌐 آدرس دسترسی: https://github-proxy-${{ github.run_id }}.loca.lt"
-        echo "⏱ این لینک تا 6 ساعت فعال است"
+        # اجرای سرور HTTP در پس‌زمینه
+        nohup http-server -p 8080 --cors &
+        sleep 3
         
-        # سرور را برای مدت طولانی فعال نگه می‌داریم
+        # ایجاد تونل با bore
+        echo "🔄 در حال ایجاد تونل..."
+        bore local 8080 --to bore.pub > tunnel.txt 2>&1 &
+        sleep 10
+        
+        # استخراج آدرس تونل
+        TUNNEL_URL=$(cat tunnel.txt | grep -o 'https://[a-z0-9-]*\.bore\.pub' | head -1)
+        
+        if [ -z "$TUNNEL_URL" ]; then
+            echo "⚠️ آدرس تونل پیدا نشد، تلاش مجدد..."
+            sleep 5
+            TUNNEL_URL=$(curl -s https://bore.pub | grep -o 'https://[a-z0-9-]*\.bore\.pub' | head -1)
+        fi
+        
+        echo "✅ پروکسی روشن شد!"
+        echo "🌐 آدرس دسترسی: ${TUNNEL_URL}"
+        echo "⏱ این لینک تا 6 ساعت فعال است"
+        echo "📝 آدرس را در مرورگر باز کنید و از پروکسی استفاده کنید"
+        
+        # نگه داشتن سرور
         while true; do sleep 60; done
-
-    - name: Keep alive
-      run: sleep 6h
